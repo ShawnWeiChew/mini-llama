@@ -123,7 +123,8 @@ void multi_headed_attention(
     // made a small mistake estimating the size of the weight offset, it should have been hidden *
     // hidden
     int qkv_weight_offset = layer * config.hidden_dim * config.hidden_dim;
-    int kv_cache_pos_offset = layer * config.max_sequence_length + pos * config.hidden_dim;
+    int kv_cache_pos_offset =
+        layer * config.max_sequence_length * config.hidden_dim + pos * config.hidden_dim;
 
     // generate qkv weights
     mat_mul(
@@ -147,7 +148,12 @@ void multi_headed_attention(
     ); // (1, hidden)
 
     // apply rope to the new value only
-    rope_with_pos(state.k_cache + kv_cache_pos_offset, state.k_cache, pos, config.hidden_dim);
+    rope_with_pos(
+        state.k_cache + kv_cache_pos_offset,
+        state.k_cache + kv_cache_pos_offset,
+        pos,
+        config.hidden_dim
+    );
     rope_with_pos(state.q_current, state.q_current, pos, config.hidden_dim);
 
     // apply attention
@@ -157,17 +163,23 @@ void multi_headed_attention(
 
         memset(state.attention_scores, 0, pos);
         // first calculate the attention scores
-        float *current_k_entry = state.k_cache + full_seq_kv_cache_offset;
         float *current_q_entry = state.q_current + h * config.head_dim;
+        float *current_k_entry = state.k_cache + full_seq_kv_cache_offset;
+
         for (int t = 0; t <= pos; t++) {
             for (int d = 0; d < config.head_dim; d++) {
                 // find the position of the value in the v_cache
                 state.attention_scores[t] +=
-                    current_q_entry[d] * current_k_entry[t * config.head_dim + d];
+                    current_q_entry[d] *
+                    // offset by the token + head number
+                    current_k_entry[t * config.hidden_dim + h * config.head_dim + d];
             }
+
+            state.attention_scores[t] /= std::sqrt(config.head_dim);
         }
 
-        softmax(state.attention_scores, state.softmax_attention_scores, 1, pos);
+        // NOTE: forgot to inlcude the + 1 here !!!
+        softmax(state.attention_scores, state.softmax_attention_scores, 1, pos + 1);
 
         // then calculate the layer output
         float *current_v_entry = state.v_cache + full_seq_kv_cache_offset;
@@ -178,7 +190,8 @@ void multi_headed_attention(
         for (int t = 0; t <= pos; t++) {
             for (int d = 0; d < config.head_dim; d++) {
                 current_attention_activations[d] +=
-                    state.softmax_attention_scores[t] * current_v_entry[t * config.head_dim + d];
+                    state.softmax_attention_scores[t] *
+                    current_v_entry[t * config.hidden_dim + h * config.head_dim + d];
             }
         }
     }
@@ -225,7 +238,7 @@ void feed_forward(float *in, size_t layer, TransformerState &state, LlamaConfig 
 
     mat_mul(
         state.ffn_w1_activation,
-        state.ffn_w3,
+        state.ffn_w3 + ffn_weight_offset,
         state.post_ffn_activation,
         1,
         config.ffn_proj_up,
