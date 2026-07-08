@@ -13,4 +13,6 @@ void rms_norm(
 
 void rope(float *in, float *out, size_t M, size_t N);
 
+void silu(float *in, float *out, size_t M, size_t N);
+
 #endif

@@ -77,3 +77,12 @@ void rope(float *in, float *out, size_t M, size_t N) {
         }
     }
 }
+
+void silu(float *in, float *out, size_t M, size_t N) {
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < N; j++) {
+            int idx = i * N + j;
+            out[idx] = in[idx] * 1.0f / (1.0f + std::exp(-in[idx]));
+        }
+    }
+}
