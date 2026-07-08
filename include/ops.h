@@ -3,6 +3,7 @@
 
 #include <unistd.h>
 
+// base ops
 void mat_mul(float *a, float *b, float *c, size_t M, size_t K, size_t N);
 
 void softmax(float *in, float *out, size_t M, size_t N);
@@ -14,5 +15,7 @@ void rms_norm(
 void rope(float *in, float *out, size_t M, size_t N);
 
 void silu(float *in, float *out, size_t M, size_t N);
+
+void transpose(float *in, float *out, size_t M, size_t N);
 
 #endif

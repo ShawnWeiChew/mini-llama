@@ -1,6 +1,6 @@
 
 #include "../include/ops.h"
-#include "../include/config.h"
+#include "../include/llama.h"
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -83,6 +83,14 @@ void silu(float *in, float *out, size_t M, size_t N) {
         for (int j = 0; j < N; j++) {
             int idx = i * N + j;
             out[idx] = in[idx] * 1.0f / (1.0f + std::exp(-in[idx]));
+        }
+    }
+}
+
+void transpose(float *in, float *out, size_t M, size_t N) {
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < M; j++) {
+            out[i * M + j] = in[j * N + i];
         }
     }
 }

@@ -10,4 +10,14 @@ struct LlamaConfig {
 
 } inline llama_config;
 
+struct TransformerState {
+    // attention states
+    float *wq;
+    float *wk;
+    float *wv;
+
+    // ffn states
+    float *ffn_activation;
+} inline transformer_state;
+
 #endif
