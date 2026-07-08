@@ -13,9 +13,15 @@ void rms_norm(
 );
 
 void rope(float *in, float *out, size_t M, size_t N);
+void rope_with_pos(float *in, float *out, int pos, size_t N);
 
 void silu(float *in, float *out, size_t M, size_t N);
 
 void transpose(float *in, float *out, size_t M, size_t N);
+
+// nn ops
+void multi_headed_attention(float *in, float *out, size_t M, size_t N);
+
+void ffn(float *in, float *out, size_t M, size_t N);
 
 #endif
