@@ -11,4 +11,6 @@ void rms_norm(
     float *in, float *element_wise_affine, float *out, size_t M, size_t N, float eps = 1e-5
 );
 
+void rope(float *in, float *out, size_t M, size_t N);
+
 #endif

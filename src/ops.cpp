@@ -1,5 +1,7 @@
 
 #include "../include/ops.h"
+#include "../include/config.h"
+#include <cassert>
 #include <cmath>
 #include <iostream>
 #include <memory>
@@ -49,6 +51,29 @@ void rms_norm(float *in, float *element_wise_affine, float *out, size_t M, size_
         for (int j = 0; j < N; j++) {
             int idx = i * N + j;
             out[idx] = in[idx] / sum;
+        }
+    }
+}
+
+// apply rope on the inner dimension
+void rope(float *in, float *out, size_t M, size_t N) {
+    assert(N % 2 == 0 && "Inner RoPE dimension should be multiple of 2");
+
+    for (int i = 0; i < M; i++) {        // this refers to the seq pos
+        for (int j = 0; j < N; j += 2) { // this refers to the pointer within the hidden dimension
+            float theta = 1.0f / std::pow(10000, static_cast<float>(j) / N);
+            // TODO: verify that this absolute_position thing is correct
+            // this should probably be for the latest entry in the forward pass
+            // but I am not sure how it plays into this
+            // Note also that I dont really know what the in and out should be
+            float frequency = i * theta;
+
+            float sin = std::sin(frequency);
+            float cos = std::cos(frequency);
+
+            int idx = i * N + j; // this refers to the even index, while +1 refers to the odd index
+            out[idx] = in[idx] * cos - in[idx + 1] * sin;
+            out[idx + 1] = in[idx] * sin + in[idx + 1] * cos;
         }
     }
 }
