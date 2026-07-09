@@ -169,4 +169,6 @@ int main() {
                                      1.0732098818,  0.4883883893,  0.5461358428,  1.1291904449,
                                      -0.5033807158, -0.6832618713, 1.3802517653,  -0.3806239963};
     assert(check_arrays(a3_out, a3_transpose_expected, a3_size));
+
+    std::cout << "Passed all ops tests" << std::endl;
 }
