@@ -17,6 +17,10 @@ struct LlamaConfig {
 } inline llama_config;
 
 struct TransformerState {
+    TransformerState(LlamaConfig &config);
+
+    ~TransformerState();
+
     // weights
     // pre-attention rmsnorm element affine
     float *pre_attention_rms_norm; // (layer, dim)
@@ -36,6 +40,10 @@ struct TransformerState {
 
     float *final_rms_norm;
 
+    float *token_embedding_table;
+
+    float *final_linear;
+
     // intermediate activations
     float *q_current;
 
@@ -54,7 +62,8 @@ struct TransformerState {
 
     float *post_ffn_activation; // (seq, hidden)
 
-} inline transformer_state;
+    float *logits;
+};
 
 struct TokenIndex {
     std::string str;
@@ -79,8 +88,15 @@ struct Tokenizer {
     );
     char *decode(int prev_token, int token);
 
+    void safe_print(char *piece);
+
   private:
     int str_lookup(std::string token_to_find);
 };
+
+// the simplest form of sampling
+int sample_argmax(float *probabilities, int n);
+
+void generate(Tokenizer &tokenizer, TransformerState &state);
 
 #endif

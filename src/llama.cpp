@@ -1,13 +1,16 @@
 #include "../include/llama.h"
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <sys/mman.h>
 
 void Tokenizer::build_tokenizer(const std::string &tokenizer_path, int vocab_size) {
     vocab.resize(vocab_size);
@@ -191,6 +194,19 @@ char *Tokenizer::decode(int prev_token, int token) {
     return piece;
 }
 
+// the tokenizer can print out bad values, ignore those
+void Tokenizer::safe_print(char *piece) {
+    if (!piece) {
+        return;
+    } else if (piece[0] == '\0') {
+        return;
+    } else if (!isprint(piece[0]) || !isspace(piece[0])) {
+        return;
+    }
+
+    printf("%s", piece);
+}
+
 int Tokenizer::str_lookup(std::string str) {
     TokenIndex tok = {.str = str}; // acts as the key to search for
 
@@ -203,4 +219,128 @@ int Tokenizer::str_lookup(std::string str) {
     }
 
     return -1; // Not found
+}
+
+int sample_argmax(float *probabilities, int n) {
+    float max_prob = probabilities[0];
+    int best_idx = 0;
+
+    for (int i = 0; i < n; i++) {
+        if (probabilities[i] > max_prob) {
+            max_prob = probabilities[i];
+            best_idx = i;
+        }
+    }
+
+    return best_idx;
+}
+
+typedef struct {
+    int dim;        // transformer dimension
+    int hidden_dim; // for ffn layers
+    int n_layers;   // number of layers
+    int n_heads;    // number of query heads
+    int n_kv_heads; // number of key/value heads (can be < query heads because of
+                    // multiquery)
+    int vocab_size; // vocabulary size, usually 256 (byte-level)
+    int seq_len;    // max sequence length
+} Config;
+
+TransformerState::TransformerState(LlamaConfig &config) {
+    // allocate the weight space, and read in the model weights
+    Config weight_config;
+    FILE *weights = fopen("stories15M.bin", "rb");
+
+    if (weights == NULL) {
+        std::cerr << "The weights file could not be opened";
+        std::exit(1);
+    }
+
+    if (fread(&weight_config, sizeof(Config), 1, weights) != 1) {
+        exit(1);
+    }
+
+    fseek(weights, 0, SEEK_END);
+    int file_size = ftell(weights);
+    fclose(weights);
+
+    int fd = open("stories15M.bin", O_RDONLY);
+    if (fd == -1) {
+        std::cerr << "Opening of file failed";
+        std::exit(1);
+    }
+
+    float *data = (float *)mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
+
+    float *weights_ptr = data + sizeof(Config) / sizeof(float);
+
+    // point the ptrs to the weights
+    token_embedding_table = weights_ptr;
+    weights_ptr += config.vocab_size * config.hidden_dim;
+
+    pre_attention_rms_norm = weights_ptr;
+    weights_ptr += config.n_layers * config.hidden_dim;
+
+    wq = weights_ptr;
+    weights_ptr += config.n_layers * config.hidden_dim * config.hidden_dim;
+    wk = weights_ptr;
+    weights_ptr += config.n_layers * config.hidden_dim * config.hidden_dim;
+    wv = weights_ptr;
+    weights_ptr += config.n_layers * config.hidden_dim * config.hidden_dim;
+
+    wo = weights_ptr;
+    weights_ptr += config.n_layers * config.hidden_dim * config.hidden_dim;
+
+    pre_ffn_rms_norm = weights_ptr;
+    weights_ptr += config.n_layers * config.hidden_dim;
+
+    ffn_w1 = weights_ptr;
+    weights_ptr += config.n_layers * config.hidden_dim * config.ffn_proj_up;
+    ffn_w2 = weights_ptr;
+    weights_ptr += config.n_layers * config.hidden_dim * config.ffn_proj_up;
+    ffn_w3 = weights_ptr;
+    weights_ptr += config.n_layers * config.hidden_dim * config.ffn_proj_up;
+
+    final_rms_norm = weights_ptr;
+
+    final_linear = token_embedding_table;
+
+    // afterwards, allocate the run state space
+    q_current = (float *)calloc(1 * config.hidden_dim, sizeof(float));
+    k_cache = (float *)calloc(
+        config.n_layers * config.max_sequence_length * config.hidden_dim, sizeof(float)
+    );
+    v_cache = (float *)calloc(
+        config.n_layers * config.max_sequence_length * config.hidden_dim, sizeof(float)
+    );
+    attention_scores = (float *)calloc(1 * config.max_sequence_length, sizeof(float));
+    softmax_attention_scores = (float *)calloc(1 * config.max_sequence_length, sizeof(float));
+    post_attention_activations =
+        (float *)calloc(config.max_sequence_length * config.hidden_dim, sizeof(float));
+    pre_ffn_rms_norm_activations =
+        (float *)calloc(config.max_sequence_length * config.hidden_dim, sizeof(float));
+
+    ffn_w1_activation =
+        (float *)calloc(config.max_sequence_length * config.ffn_proj_up, sizeof(float));
+    ffn_w2_activation =
+        (float *)calloc(config.max_sequence_length * config.ffn_proj_up, sizeof(float));
+
+    post_ffn_activation =
+        (float *)calloc(config.max_sequence_length * config.hidden_dim, sizeof(float));
+
+    logits = (float *)calloc(config.max_sequence_length, sizeof(float));
+}
+
+TransformerState::~TransformerState() {
+    free(q_current);
+    free(k_cache);
+    free(v_cache);
+    free(attention_scores);
+    free(softmax_attention_scores);
+    free(post_attention_activations);
+    free(pre_ffn_rms_norm_activations);
+    free(ffn_w1_activation);
+    free(ffn_w2_activation);
+    free(post_ffn_activation);
+    free(logits);
 }
