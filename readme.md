@@ -1,0 +1,1 @@
+Inspired by Karpathy, trying to make it idiomatic C++ is a future goal
