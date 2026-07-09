@@ -45,8 +45,10 @@ void Tokenizer::build_tokenizer(const std::string &tokenizer_path, int vocab_siz
 
 static bool compare_tokens(const TokenIndex &a, const TokenIndex &b) {
     return std::lexicographical_compare(
-        a.str.begin(), a.str.end(),
-        b.str.begin(), b.str.end(),
+        a.str.begin(),
+        a.str.end(),
+        b.str.begin(),
+        b.str.end(),
         [](char lhs, char rhs) {
             return static_cast<unsigned char>(lhs) < static_cast<unsigned char>(rhs);
         }
@@ -171,6 +173,22 @@ void Tokenizer::encode(
 
     if (eos)
         tokens[n_tokens++] = 2;
+}
+
+char *Tokenizer::decode(int prev_token, int token) {
+    char *piece = vocab[token].get();
+
+    // remove any whitespace after BOS token
+    if (prev_token == 1 && piece[0] == ' ') {
+        piece++;
+    }
+
+    unsigned char byte_val;
+    if (sscanf(piece, "<0x%02hhX>", &byte_val) == 1) {
+        piece = (char *)byte_pieces + byte_val * 2;
+    }
+
+    return piece;
 }
 
 int Tokenizer::str_lookup(std::string str) {

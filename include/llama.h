@@ -77,7 +77,7 @@ struct Tokenizer {
     void encode(
         const std::string &test, const int8_t &bos, const int8_t &eos, int *tokens, int &n_tokens
     );
-    std::string decode(int prev_token, int token);
+    char *decode(int prev_token, int token);
 
   private:
     int str_lookup(std::string token_to_find);
