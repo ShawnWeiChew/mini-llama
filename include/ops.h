@@ -1,6 +1,7 @@
 #ifndef OPS_H_
 #define OPS_H_
 
+#include "llama.h"
 #include <unistd.h>
 
 // base ops
@@ -13,15 +14,17 @@ void rms_norm(
 );
 
 void rope(float *in, float *out, size_t M, size_t N);
-void rope_with_pos(float *in, float *out, int pos, size_t N);
+void rope_with_pos(float *in, float *out, int pos, size_t N, size_t head_size);
 
 void silu(float *in, float *out, size_t M, size_t N);
 
 void transpose(float *in, float *out, size_t M, size_t N);
 
 // nn ops
-void multi_headed_attention(float *in, float *out, size_t M, size_t N);
+void multi_headed_attention(
+    float *in, size_t layer, size_t pos, TransformerState &state, LlamaConfig &config
+);
 
-void ffn(float *in, float *out, size_t M, size_t N);
+void feed_forward(float *in, size_t layer, TransformerState &state, LlamaConfig &config);
 
 #endif

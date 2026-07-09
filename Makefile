@@ -5,6 +5,8 @@ TARGETS=generate
 TARGET_PATH=$(BUILD_FOLDER)/$(TARGETS)
 SRC_DIR=src
 
+CFLAGS=-O3 -march=native
+
 SRCS=$(wildcard $(SRC_DIR)/*.cpp)
 TESTS=$(wildcard tests/*.cpp)
 OBJS=$(patsubst %.cpp, $(BUILD_FOLDER)/%.o, $(notdir $(SRCS)))
@@ -14,10 +16,10 @@ OBJS=$(patsubst %.cpp, $(BUILD_FOLDER)/%.o, $(notdir $(SRCS)))
 vpath %.cpp $(SRC_DIR)
 
 $(TARGET_PATH) : $(OBJS)
-	$(CC) $(INCLUDES) $^ -o $@
+	$(CC) $(INCLUDES) $(CFLAGS) $^ -o $@
 
 $(BUILD_FOLDER)/%.o : %.cpp | $(BUILD_FOLDER)
-	$(CC) $(INCLUDES) -c $< -o $@
+	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
 
 $(BUILD_FOLDER):
 	mkdir -p $@
@@ -31,7 +33,7 @@ $(BUILD_FOLDER)/test_encoding.o : tests/test_encoding.cpp | $(BUILD_FOLDER)
 build/check : build/check.o build/ops.o 
 	$(CC) $(INCLUDES) -o $@ $^
 
-build/test_encoding : build/llama.o build/test_encoding.o
+build/test_encoding : build/llama.o build/test_encoding.o build/ops.o
 	$(CC) $(INCLUDES) -o $@ $^
 
 check : build/check build/test_encoding

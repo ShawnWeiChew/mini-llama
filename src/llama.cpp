@@ -1,4 +1,5 @@
 #include "../include/llama.h"
+#include "../include/ops.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -306,6 +307,7 @@ TransformerState::TransformerState(LlamaConfig &config) {
     final_linear = token_embedding_table;
 
     // afterwards, allocate the run state space
+    // NOTE: there might be some over allocation here...
     q_current = (float *)calloc(1 * config.hidden_dim, sizeof(float));
     k_cache = (float *)calloc(
         config.n_layers * config.max_sequence_length * config.hidden_dim, sizeof(float)
@@ -315,20 +317,19 @@ TransformerState::TransformerState(LlamaConfig &config) {
     );
     attention_scores = (float *)calloc(1 * config.max_sequence_length, sizeof(float));
     softmax_attention_scores = (float *)calloc(1 * config.max_sequence_length, sizeof(float));
-    post_attention_activations =
-        (float *)calloc(config.max_sequence_length * config.hidden_dim, sizeof(float));
-    pre_ffn_rms_norm_activations =
-        (float *)calloc(config.max_sequence_length * config.hidden_dim, sizeof(float));
+    post_attention_activations = (float *)calloc(1 * config.hidden_dim, sizeof(float));
+    pre_ffn_rms_norm_activations = (float *)calloc(1 * config.hidden_dim, sizeof(float));
 
-    ffn_w1_activation =
-        (float *)calloc(config.max_sequence_length * config.ffn_proj_up, sizeof(float));
-    ffn_w2_activation =
-        (float *)calloc(config.max_sequence_length * config.ffn_proj_up, sizeof(float));
+    ffn_w1_activation = (float *)calloc(1 * config.ffn_proj_up, sizeof(float));
+    ffn_w2_activation = (float *)calloc(1 * config.ffn_proj_up, sizeof(float));
 
-    post_ffn_activation =
-        (float *)calloc(config.max_sequence_length * config.hidden_dim, sizeof(float));
+    post_ffn_activation = (float *)calloc(1 * config.hidden_dim, sizeof(float));
 
-    logits = (float *)calloc(config.max_sequence_length, sizeof(float));
+    logits = (float *)calloc(config.vocab_size, sizeof(float));
+    pre_attention_rms_norm_activations = (float *)calloc(1 * config.hidden_dim, sizeof(float));
+    post_ffn_rms_norm_activations = (float *)calloc(1 * config.hidden_dim, sizeof(float));
+
+    post_final_rms_norm = (float *)calloc(config.hidden_dim, sizeof(float));
 }
 
 TransformerState::~TransformerState() {
@@ -343,4 +344,48 @@ TransformerState::~TransformerState() {
     free(ffn_w2_activation);
     free(post_ffn_activation);
     free(logits);
+}
+
+static void print_sequence(float *tokens, size_t size) {
+    for (int i = 0; i < size; i++) {
+        printf(" %f", tokens[i]);
+    }
+    printf("\n");
+}
+
+void transformer_forward(
+    TransformerState &state, LlamaConfig &config, float *input_token, int pos
+) {
+    for (int l = 0; l < config.n_layers; l++) {
+        float *layer_input = l == 0 ? input_token : state.post_ffn_activation;
+
+        // first rms norm
+        rms_norm(
+            layer_input,
+            state.pre_attention_rms_norm + l * config.hidden_dim,
+            state.pre_attention_rms_norm_activations,
+            1,
+            config.hidden_dim
+        );
+
+        // then do attention
+        multi_headed_attention(state.pre_attention_rms_norm_activations, l, pos, state, config);
+
+        // linear projection
+        mat_mul(
+            state.post_attention_activations,
+            state.wo + l * config.hidden_dim * config.hidden_dim,
+            state.pre_ffn_rms_norm_activations,
+            1,
+            config.hidden_dim,
+            config.hidden_dim
+        );
+
+        // NOTE: the input should still be of size 1, hidden_dim
+        for (int i = 0; i < config.hidden_dim; i++) {
+            state.pre_ffn_rms_norm_activations[i] += layer_input[i];
+        }
+
+        feed_forward(state.pre_ffn_rms_norm_activations, l, state, config);
+    }
 }

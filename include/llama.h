@@ -45,6 +45,7 @@ struct TransformerState {
     float *final_linear;
 
     // intermediate activations
+    float *pre_attention_rms_norm_activations;
     float *q_current;
 
     float *k_cache; // (layer, seq, dim)
@@ -57,10 +58,14 @@ struct TransformerState {
 
     float *pre_ffn_rms_norm_activations;
 
+    float *post_ffn_rms_norm_activations;
+
     float *ffn_w1_activation;
     float *ffn_w2_activation;
 
     float *post_ffn_activation; // (seq, hidden)
+
+    float *post_final_rms_norm;
 
     float *logits;
 };
@@ -97,6 +102,8 @@ struct Tokenizer {
 // the simplest form of sampling
 int sample_argmax(float *probabilities, int n);
 
-void generate(Tokenizer &tokenizer, TransformerState &state);
+void transformer_forward(
+    TransformerState &state, LlamaConfig &config, float *token_embedding, int pos
+);
 
 #endif
